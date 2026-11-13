@@ -1,0 +1,16 @@
+# Overlay for the RTX 3090 box:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+services:
+  ollama:
+    environment:
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH_GPU:-32768}
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_FLASH_ATTENTION: "1"
+      OLLAMA_KV_CACHE_TYPE: q8_0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

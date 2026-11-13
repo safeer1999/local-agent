@@ -1,0 +1,19 @@
+# Plumbing-only overlay for sandboxes that cannot pull models.
+#   docker compose -f docker-compose.yml -f docker-compose.mock.yml up -d
+# Replaces the Ollama server with a stdlib mock that speaks /v1 and /api/embed.
+services:
+  ollama:
+    image: python:3.12-slim
+    command: ["python", "/mock/server.py"]
+    volumes: !override
+      - ./mock:/mock:ro
+    environment:
+      MODEL_NAME: ${MODEL_NAME}
+  model-pull:
+    profiles: ["disabled"]
+  # Sandbox only: trust the egress proxy CA so pip works inside the container.
+  rag:
+    volumes:
+      - /root/.ccr/ca-bundle.crt:/ca.crt:ro
+    environment:
+      PIP_CERT: /ca.crt

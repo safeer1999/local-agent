@@ -1,0 +1,74 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "local/{env:MODEL_NAME}",
+  "small_model": "local/{env:MODEL_NAME}",
+  "autoupdate": false,
+  "share": "disabled",
+  "provider": {
+    "local": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Local Ollama",
+      "options": {
+        "baseURL": "{env:HOST_OPENAI_BASE_URL}",
+        "apiKey": "{env:OPENAI_API_KEY}"
+      },
+      "models": {
+        "{env:MODEL_NAME}": {},
+        "{env:MODEL_CODE}": {},
+        "{env:MODEL_WRITE}": {},
+        "{env:MODEL_THINK}": {}
+      }
+    }
+  },
+  "agent": {
+    "ai-code": {
+      "description": "Coding agent",
+      "mode": "primary",
+      "model": "local/{env:MODEL_CODE}"
+    },
+    "ai-write": {
+      "description": "Writing and general language",
+      "mode": "primary",
+      "model": "local/{env:MODEL_WRITE}",
+      "tools": { "bash": false }
+    },
+    "ai-think": {
+      "description": "Heavy reasoning",
+      "mode": "primary",
+      "model": "local/{env:MODEL_THINK}"
+    }
+  },
+  "permission": {
+    "edit": "ask",
+    "bash": "ask",
+    "webfetch": "ask"
+  },
+  "mcp": {
+    "filesystem": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
+      "enabled": true
+    },
+    "git": {
+      "type": "local",
+      "command": ["uvx", "mcp-server-git", "--repository", "/workspace"],
+      "enabled": true
+    },
+    "searxng": {
+      "type": "local",
+      "command": ["npx", "-y", "mcp-searxng"],
+      "environment": { "SEARXNG_URL": "http://127.0.0.1:8080" },
+      "enabled": true
+    },
+    "rag": {
+      "type": "local",
+      "command": ["python3", "/opt/local-agent/rag/mcp_server.py"],
+      "environment": {
+        "OLLAMA_URL": "http://127.0.0.1:11434",
+        "CHROMA_URL": "http://127.0.0.1:8000",
+        "EMBED_MODEL": "{env:EMBED_MODEL}"
+      },
+      "enabled": true
+    }
+  }
+}

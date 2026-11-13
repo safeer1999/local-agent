@@ -1,0 +1,84 @@
+# CPU-capable base. The GPU box adds docker-compose.gpu.yml.
+# Every published port is bound to 127.0.0.1.
+x-privacy: &privacy
+  DO_NOT_TRACK: "true"
+  SCARF_NO_ANALYTICS: "true"
+  ANONYMIZED_TELEMETRY: "false"
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports: ["127.0.0.1:${OLLAMA_PORT:-11434}:11434"]
+    volumes: ["./data/ollama:/root/.ollama"]
+    environment:
+      <<: *privacy
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-4096}
+      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-5m}
+    restart: unless-stopped
+
+  # One-shot: pull the models named in .env
+  model-pull:
+    image: ollama/ollama:latest
+    depends_on: [ollama]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      MODELS: "${MODEL_NAME} ${MODEL_CODE} ${MODEL_WRITE} ${MODEL_THINK} ${EMBED_MODEL}"
+    entrypoint: ["/bin/sh", "-c", "for m in $$(echo $$MODELS | tr ' ' '\\n' | sort -u); do until ollama pull $$m; do sleep 3; done; done"]
+    restart: "no"
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    depends_on: [ollama, searxng]
+    ports: ["127.0.0.1:${WEBUI_PORT:-3000}:8080"]
+    volumes: ["./data/open-webui:/app/backend/data"]
+    environment:
+      <<: *privacy
+      OPENAI_API_BASE_URL: ${OPENAI_BASE_URL}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OLLAMA_BASE_URL: http://ollama:11434
+      WEBUI_AUTH: "true"
+      ENABLE_OPENAI_API: "true"
+      ENABLE_RAG_WEB_SEARCH: "true"
+      RAG_WEB_SEARCH_ENGINE: searxng
+      SEARXNG_QUERY_URL: http://searxng:8080/search?q=<query>&format=json
+      RAG_EMBEDDING_ENGINE: ollama
+      RAG_EMBEDDING_MODEL: ${EMBED_MODEL}
+      RAG_OLLAMA_BASE_URL: http://ollama:11434
+    restart: unless-stopped
+
+  searxng:
+    image: searxng/searxng:latest
+    ports: ["127.0.0.1:${SEARXNG_PORT:-8080}:8080"]
+    volumes: ["./searxng/settings.yml:/etc/searxng/settings.yml:ro"]
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET}
+      GRANIAN_HOST: 0.0.0.0
+    restart: unless-stopped
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports: ["127.0.0.1:${CHROMA_PORT:-8000}:8000"]
+    volumes: ["./data/chroma:/data"]
+    environment:
+      <<: *privacy
+      IS_PERSISTENT: "TRUE"
+      PERSIST_DIRECTORY: /data
+    restart: unless-stopped
+
+  # Local RAG: indexes ./rag/docs into Chroma with the local embedding model.
+  # Query: docker compose exec rag python rag.py query "question"
+  rag:
+    image: python:3.12-slim
+    depends_on: [ollama, chroma]
+    working_dir: /app
+    volumes: ["./rag:/app:ro"]
+    environment:
+      <<: *privacy
+      OLLAMA_URL: http://ollama:11434
+      CHROMA_URL: http://chroma:8000
+      EMBED_MODEL: ${EMBED_MODEL}
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    command: ["sh", "-c", "pip install -q -r requirements.txt && python rag.py index /app/docs && sleep infinity"]
+    restart: unless-stopped

@@ -1,0 +1,2 @@
+chromadb-client>=1.0
+requests
